@@ -5,7 +5,7 @@ from otel_setup import setup_telemetry
 from opentelemetry import trace, metrics
 
 app = Flask(__name__)
-setup_telemetry("service-b", app, dt_cost_center="team_b", dt_cost_product="service_topology")
+base_attrs = setup_telemetry("service-b", app, dt_cost_center="team_b", dt_cost_product="service_topology")
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("service-b")
@@ -47,19 +47,19 @@ def store():
     with tracer.start_as_current_span("store") as span:
         body = request.get_json(force=True)
         _store.append(body)
-        items_stored.add(1)
-        store_requests.add(1, {"route": "/store"})
+        items_stored.add(1, base_attrs)
+        store_requests.add(1, {**base_attrs, "route": "/store"})
         span.set_attribute("store.item_count", len(_store))
         logger.info("stored item count=%d", len(_store))
         elapsed_ms = (time.time() - start) * 1000.0
-        store_latency_ms.record(elapsed_ms, {"route": "/store"})
+        store_latency_ms.record(elapsed_ms, {**base_attrs, "route": "/store"})
         return jsonify({"stored": True, "count": len(_store)})
 
 
 @app.route("/data", methods=["GET"])
 def data():
     with tracer.start_as_current_span("data") as span:
-        data_requests.add(1, {"route": "/data"})
+        data_requests.add(1, {**base_attrs, "route": "/data"})
         span.set_attribute("store.item_count", len(_store))
         logger.info("returning item count=%d", len(_store))
         return jsonify({"items": _store})

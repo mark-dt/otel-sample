@@ -8,7 +8,7 @@ from otel_setup import setup_telemetry
 from opentelemetry import trace, metrics
 
 app = Flask(__name__)
-setup_telemetry("service-a", app, dt_cost_center="team_a", dt_cost_product="service_topology")
+base_attrs = setup_telemetry("service-a", app, dt_cost_center="team_a", dt_cost_product="service_topology")
 
 SERVICE_B_URL = "http://localhost:5001"
 
@@ -49,20 +49,20 @@ def trigger():
         span.set_attribute("http.method", "GET")
         span.set_attribute("http.route", "/trigger")
 
-        trigger_requests.add(1, {"route": "/trigger", "http.method": "GET"})
+        trigger_requests.add(1, {**base_attrs, "route": "/trigger", "http.method": "GET"})
 
         data = {"message": "Hello from Service A!"}
 
-        service_b_calls.add(1, {"method": "POST", "peer.service": "service-b"})
+        service_b_calls.add(1, {**base_attrs, "method": "POST", "peer.service": "service-b"})
         post_resp = requests.post(f"{SERVICE_B_URL}/store", json=data, timeout=5)
         logger.info("POST /store status=%s", post_resp.status_code)
 
-        service_b_calls.add(1, {"method": "GET", "peer.service": "service-b"})
+        service_b_calls.add(1, {**base_attrs, "method": "GET", "peer.service": "service-b"})
         get_resp = requests.get(f"{SERVICE_B_URL}/data", timeout=5)
         logger.info("GET /data status=%s", get_resp.status_code)
 
         elapsed_ms = (time.time() - start) * 1000.0
-        trigger_latency_ms.record(elapsed_ms, {"route": "/trigger"})
+        trigger_latency_ms.record(elapsed_ms, {**base_attrs, "route": "/trigger"})
 
     return jsonify({"status": "ok", "latency_ms": round(elapsed_ms, 2)}), 200
 

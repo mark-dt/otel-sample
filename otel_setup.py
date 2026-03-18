@@ -80,7 +80,7 @@ def setup_telemetry(
     dt_cost_product: Optional[str] = None,
     enable_flask_instrumentation: bool = True,
     enable_requests_instrumentation: bool = True,
-) -> None:
+) -> Dict[str, str]:
     """
     Configures OTLP/HTTP protobuf exporters for:
       - traces  -> {DT_ENDPOINT}/v1/traces
@@ -169,6 +169,10 @@ def setup_telemetry(
 
     if enable_requests_instrumentation:
         RequestsInstrumentor().instrument()
+
+    # Return base metric attributes so callers can include service.name
+    # as a dimension on every metric data point.
+    return {"service.name": service_name}
 
 
 # Backwards-compatible alias
