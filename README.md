@@ -54,8 +54,21 @@ All telemetry configuration lives in `otel_setup.py`. Each service calls `setup_
 - `OTLPMetricExporter` to `{DT_ENDPOINT}/v1/metrics`
 - Delta temporality for Counter, Histogram, and ObservableCounter (required by Dynatrace)
 - Cumulative temporality for UpDownCounter, ObservableUpDownCounter, and ObservableGauge
-- `TraceBasedExemplarFilter` enabled — attaches trace/span IDs to metric data points for service correlation
-- `service.name` included as a metric attribute on every data point so Dynatrace can filter/split metrics by service
+- `TraceBasedExemplarFilter` enabled — attaches trace/span IDs to metric data points when recorded inside an active span
+
+#### Metric-to-Service Correlation
+
+Dynatrace does not automatically promote OTel resource attributes (like `service.name`) into metric dimensions. The `service.name` on the resource identifies the service for traces and logs, but metrics need it as an explicit data point attribute to be filterable/splittable by service in the Dynatrace metrics explorer.
+
+To solve this, `setup_telemetry()` returns a `base_attrs` dict containing `{"service.name": "<name>"}`. Each service merges this into every `.add()` and `.record()` call:
+
+```python
+base_attrs = setup_telemetry("service-a", app, ...)
+# ...
+trigger_requests.add(1, {**base_attrs, "route": "/trigger"})
+```
+
+Additionally, the `TraceBasedExemplarFilter` on the `MeterProvider` attaches `trace_id`/`span_id` as exemplars to metric data points recorded inside an active span. This allows Dynatrace to link individual metric samples back to specific traces. All metric recordings are placed inside `start_as_current_span()` blocks to ensure exemplars are captured.
 
 | Metric | Type | Service |
 |--------|------|---------|
@@ -70,7 +83,21 @@ All telemetry configuration lives in `otel_setup.py`. Each service calls `setup_
 ### Logs
 - `LoggerProvider` with `BatchLogRecordProcessor` → `OTLPLogExporter` to `{DT_ENDPOINT}/v1/logs`
 - Python `logging` bridged to OTel via `LoggingHandler` — all `logger.info()` calls are exported as OTLP log records
-- Logs are automatically correlated with active traces (trace_id/span_id attached)
+
+#### Log-to-Trace Correlation
+
+The `LoggingHandler` added to Python's root logger intercepts every stdlib `logging` call and converts it to an OTel `LogRecord`. During conversion, it reads the current span context from `opentelemetry.context`. If a span is active, the log record is automatically stamped with that span's `trace_id` and `span_id`. Dynatrace uses these fields to link logs to the matching distributed trace.
+
+This means log correlation depends on **where** the log call happens relative to the span lifecycle:
+
+```python
+# service_a.py
+logger.info("Trigger called")                        # NO trace context — outside any span
+with tracer.start_as_current_span("trigger_request"):
+    logger.info("POST /store status=%s", status)      # HAS trace context — inside active span
+```
+
+Logs emitted before or after a span will still be exported to Dynatrace but won't be linked to a trace. Only logs emitted inside a `start_as_current_span()` block get the correlation.
 
 ### Resource Attributes
 Each service's telemetry carries:
