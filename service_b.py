@@ -45,6 +45,8 @@ def health():
 def store():
     start = time.time()
     with tracer.start_as_current_span("store") as span:
+        for k, v in base_attrs.items():
+            span.set_attribute(k, v)
         body = request.get_json(force=True)
         _store.append(body)
         items_stored.add(1, base_attrs)
@@ -59,6 +61,8 @@ def store():
 @app.route("/data", methods=["GET"])
 def data():
     with tracer.start_as_current_span("data") as span:
+        for k, v in base_attrs.items():
+            span.set_attribute(k, v)
         data_requests.add(1, {**base_attrs, "route": "/data"})
         span.set_attribute("store.item_count", len(_store))
         logger.info("returning item count=%d", len(_store))

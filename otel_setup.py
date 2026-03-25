@@ -170,9 +170,14 @@ def setup_telemetry(
     if enable_requests_instrumentation:
         RequestsInstrumentor().instrument()
 
-    # Return base metric attributes so callers can include service.name
-    # as a dimension on every metric data point.
-    return {"service.name": service_name}
+    # Return base attributes so callers can include service.name and cost
+    # dimensions on every metric data point and span.
+    base = {"service.name": service_name}
+    if dt_cost_product is not None:
+        base["dt.cost.product"] = dt_cost_product
+    if dt_cost_center is not None:
+        base["dt.cost.costcenter"] = dt_cost_center
+    return base
 
 
 # Backwards-compatible alias

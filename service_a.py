@@ -48,6 +48,8 @@ def trigger():
     with tracer.start_as_current_span("trigger_request") as span:
         span.set_attribute("http.method", "GET")
         span.set_attribute("http.route", "/trigger")
+        for k, v in base_attrs.items():
+            span.set_attribute(k, v)
 
         trigger_requests.add(1, {**base_attrs, "route": "/trigger", "http.method": "GET"})
 
